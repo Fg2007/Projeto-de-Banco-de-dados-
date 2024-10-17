@@ -1,4 +1,4 @@
-- Este projeto implementa um sistema de cadastro e login de usuários utilizando MySQL para o banco de dados e NetBeans para o desenvolvimento. 
+- Este projeto implementa um sistema de cadastro, login e agenda de usuários utilizando MySQL para o banco de dados e NetBeans para o desenvolvimento. 
 - O objetivo é criar uma aplicação que permita o registro e autenticação.
 
 
