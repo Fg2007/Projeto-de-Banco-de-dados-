@@ -1,0 +1,361 @@
+package br.com.VIEWS;
+
+import br.com.DAO.ConexaoDAO;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.TemporalAdjusters;
+import javax.swing.JOptionPane;
+import javax.swing.table.DefaultTableModel;
+import javax.swing.ImageIcon;
+
+public class TelaAgenda extends javax.swing.JFrame {
+
+    Connection conexao = null;
+    PreparedStatement pst = null;
+    ResultSet rs = null;
+
+    public TelaAgenda() {
+        initComponents();
+        conexao = ConexaoDAO.conector();
+        carregarClientes();
+        carregarAgenda();
+        adicionarImagem();
+    }
+
+    private void carregarClientes() {
+        String sql = "select * from tb_usuarios";
+        try {
+            pst = conexao.prepareStatement(sql);
+            rs = pst.executeQuery();
+            while (rs.next()) {
+                String nomeCliente = rs.getString("nome_usuario");
+                cbClientes.addItem(nomeCliente);
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(null, "Erro ao carregar clientes: " + e);
+        }
+    }
+
+    private void registrarCompromisso() {
+        String sql = "insert into tb_agenda (data, horario, descricao, id_cliente) values (?, ?, ?, ?)";
+        try {
+            pst = conexao.prepareStatement(sql);
+            pst.setString(1, txtData.getText());
+            pst.setString(2, txtHorario.getText());
+            pst.setString(3, txtDescricao.getText());
+            pst.setString(4, String.valueOf(cbClientes.getSelectedItem()));
+            int adicionado = pst.executeUpdate();
+            if (adicionado > 0) {
+                JOptionPane.showMessageDialog(null, "Compromisso registrado com sucesso!");
+                carregarAgenda();
+                limpar();
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(null, "Erro ao registrar compromisso: " + e);
+        }
+    }
+
+    private void editarCompromisso() {
+        String sql = "update tb_agenda set data=?, horario=?, descricao=?, id_cliente=? where id_agenda=?";
+        try {
+            pst = conexao.prepareStatement(sql);
+            pst.setString(1, txtData.getText());
+            pst.setString(2, txtHorario.getText());
+            pst.setString(3, txtDescricao.getText());
+            pst.setString(4, String.valueOf(cbClientes.getSelectedItem()));
+            pst.setString(5, txtIdAgenda.getText());
+            int atualizado = pst.executeUpdate();
+            if (atualizado > 0) {
+                JOptionPane.showMessageDialog(null, "Compromisso atualizado com sucesso!");
+                carregarAgenda();
+                limpar();
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(null, "Erro ao atualizar compromisso: " + e);
+        }
+    }
+
+    private void excluirCompromisso() {
+        String sql = "delete from tb_agenda where id_agenda=?";
+        try {
+            pst = conexao.prepareStatement(sql);
+            pst.setString(1, txtIdAgenda.getText());
+            int excluido = pst.executeUpdate();
+            if (excluido > 0) {
+                JOptionPane.showMessageDialog(null, "Compromisso excluído com sucesso!");
+                carregarAgenda();
+                limpar();
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(null, "Erro ao excluir compromisso: " + e);
+        }
+    }
+
+    private void carregarAgenda() {
+        String filtro = String.valueOf(cbFiltro.getSelectedItem());
+        String sql = null;
+        LocalDate hoje = LocalDate.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+        switch (filtro) {
+            case "Dia":
+                sql = "select * from tb_agenda where data = ?";
+                try {
+                    pst = conexao.prepareStatement(sql);
+                    pst.setString(1, hoje.format(formatter));
+                } catch (Exception e) {
+                    JOptionPane.showMessageDialog(null, "Erro ao carregar compromissos do dia: " + e);
+                }
+                break;
+
+            case "Semana":
+                LocalDate inicioSemana = hoje.with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
+                LocalDate fimSemana = hoje.with(TemporalAdjusters.nextOrSame(java.time.DayOfWeek.SUNDAY));
+                sql = "select * from tb_agenda where data between ? and ?";
+                try {
+                    pst = conexao.prepareStatement(sql);
+                    pst.setString(1, inicioSemana.format(formatter));
+                    pst.setString(2, fimSemana.format(formatter));
+                } catch (Exception e) {
+                    JOptionPane.showMessageDialog(null, "Erro ao carregar compromissos da semana: " + e);
+                }
+                break;
+
+            case "Mês":
+                LocalDate inicioMes = hoje.with(TemporalAdjusters.firstDayOfMonth());
+                LocalDate fimMes = hoje.with(TemporalAdjusters.lastDayOfMonth());
+                sql = "select * from tb_agenda where data between ? and ?";
+                try {
+                    pst = conexao.prepareStatement(sql);
+                    pst.setString(1, inicioMes.format(formatter));
+                    pst.setString(2, fimMes.format(formatter));
+                } catch (Exception e) {
+                    JOptionPane.showMessageDialog(null, "Erro ao carregar compromissos do mês: " + e);
+                }
+                break;
+        }
+
+        try {
+            rs = pst.executeQuery();
+            DefaultTableModel modelo = (DefaultTableModel) tabelaAgenda.getModel();
+            modelo.setRowCount(0);
+            while (rs.next()) {
+                String data = rs.getString("data");
+                String horario = rs.getString("horario");
+                String descricao = rs.getString("descricao");
+                String cliente = rs.getString("id_cliente");
+                modelo.addRow(new Object[]{data, horario, descricao, cliente});
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(null, "Erro ao carregar agenda: " + e);
+        }
+    }
+
+    private void carregarDadosCompromisso() {
+        int linha = tabelaAgenda.getSelectedRow();
+        if (linha != -1) {
+            txtIdAgenda.setText(tabelaAgenda.getValueAt(linha, 0).toString());
+            txtData.setText(tabelaAgenda.getValueAt(linha, 1).toString());
+            txtHorario.setText(tabelaAgenda.getValueAt(linha, 2).toString());
+            txtDescricao.setText(tabelaAgenda.getValueAt(linha, 3).toString());
+            cbClientes.setSelectedItem(tabelaAgenda.getValueAt(linha, 4).toString());
+        }
+    }
+
+    private void limpar() {
+        txtData.setText(null);
+        txtHorario.setText(null);
+        txtDescricao.setText(null);
+        cbClientes.setSelectedIndex(0);
+        txtIdAgenda.setText(null);
+    }
+
+    private void adicionarImagem() {
+        ImageIcon imagem = new ImageIcon(getClass().getResource("/imagens/agenda.png"));
+        lblImagem.setIcon(imagem);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void initComponents() {
+        jLabel1 = new javax.swing.JLabel();
+        txtData = new javax.swing.JTextField();
+        jLabel2 = new javax.swing.JLabel();
+        txtHorario = new javax.swing.JTextField();
+        jLabel3 = new javax.swing.JLabel();
+        txtDescricao = new javax.swing.JTextField();
+        jLabel4 = new javax.swing.JLabel();
+        cbClientes = new javax.swing.JComboBox<>();
+        cbFiltro = new javax.swing.JComboBox<>();
+        btnSalvar = new javax.swing.JButton();
+        btnEditar = new javax.swing.JButton();
+        btnExcluir = new javax.swing.JButton();
+        jScrollPane1 = new javax.swing.JScrollPane();
+        tabelaAgenda = new javax.swing.JTable();
+        btnFechar = new javax.swing.JButton();
+        lblImagem = new javax.swing.JLabel();
+        txtIdAgenda = new javax.swing.JTextField();
+
+        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
+
+        jLabel1.setText("Data:");
+
+        jLabel2.setText("Horário:");
+
+        jLabel3.setText("Descrição:");
+
+        jLabel4.setText("Cliente:");
+
+        cbFiltro.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Dia", "Semana", "Mês" }));
+        cbFiltro.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                carregarAgenda();
+            }
+        });
+
+        btnSalvar.setText("Salvar Compromisso");
+        btnSalvar.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                registrarCompromisso();
+            }
+        });
+
+        btnEditar.setText("Editar Compromisso");
+        btnEditar.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                editarCompromisso();
+            }
+        });
+
+        btnExcluir.setText("Excluir Compromisso");
+        btnExcluir.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                excluirCompromisso();
+            }
+        });
+
+        tabelaAgenda.setModel(new javax.swing.table.DefaultTableModel(
+            new Object [][] {},
+            new String [] {
+                "ID", "Data", "Horário", "Descrição", "Cliente"
+            }
+        ));
+        tabelaAgenda.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                carregarDadosCompromisso();
+            }
+        });
+        jScrollPane1.setViewportView(tabelaAgenda);
+
+        btnFechar.setText("Fechar");
+        btnFechar.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                dispose();
+            }
+        });
+
+        txtIdAgenda.setVisible(false);
+
+        javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
+        getContentPane().setLayout(layout);
+        layout.setHorizontalGroup(
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(layout.createSequentialGroup()
+                .addContainerGap()
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(jScrollPane1)
+                    .addGroup(layout.createSequentialGroup()
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(jLabel1)
+                            .addComponent(jLabel2)
+                            .addComponent(jLabel3)
+                            .addComponent(jLabel4)
+                            .addGroup(layout.createSequentialGroup()
+                                .addComponent(cbFiltro, javax.swing.GroupLayout.PREFERRED_SIZE, 110, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                                .addComponent(btnSalvar)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                                .addComponent(btnEditar)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                                .addComponent(btnExcluir)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                                .addComponent(btnFechar))
+                            .addComponent(cbClientes, javax.swing.GroupLayout.PREFERRED_SIZE, 170, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(txtData, javax.swing.GroupLayout.PREFERRED_SIZE, 110, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(txtHorario, javax.swing.GroupLayout.PREFERRED_SIZE, 110, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(txtDescricao, javax.swing.GroupLayout.PREFERRED_SIZE, 200, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(txtIdAgenda, javax.swing.GroupLayout.PREFERRED_SIZE, 10, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addGap(0, 170, Short.MAX_VALUE)))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(lblImagem, javax.swing.GroupLayout.PREFERRED_SIZE, 200, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap())
+        );
+        layout.setVerticalGroup(
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(layout.createSequentialGroup()
+                .addContainerGap()
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(layout.createSequentialGroup()
+                        .addComponent(lblImagem, javax.swing.GroupLayout.PREFERRED_SIZE, 150, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(0, 0, Short.MAX_VALUE))
+                    .addGroup(layout.createSequentialGroup()
+                        .addComponent(jLabel1)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(txtData, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(jLabel2)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(txtHorario, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(jLabel3)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(txtDescricao, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(jLabel4)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(cbClientes, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(cbFiltro, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                            .addComponent(btnSalvar)
+                            .addComponent(btnEditar)
+                            .addComponent(btnExcluir)
+                            .addComponent(btnFechar))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 150, Short.MAX_VALUE)))
+                .addContainerGap())
+        );
+
+        pack();
+        setLocationRelativeTo(null);
+    }
+
+    private javax.swing.JButton btnEditar;
+    private javax.swing.JButton btnExcluir;
+    private javax.swing.JButton btnFechar;
+    private javax.swing.JButton btnSalvar;
+    private javax.swing.JComboBox<String> cbClientes;
+    private javax.swing.JComboBox<String> cbFiltro;
+    private javax.swing.JLabel jLabel1;
+    private javax.swing.JLabel jLabel2;
+    private javax.swing.JLabel jLabel3;
+    private javax.swing.JLabel jLabel4;
+    private javax.swing.JScrollPane jScrollPane1;
+    private javax.swing.JLabel lblImagem;
+    private javax.swing.JTable tabelaAgenda;
+    private javax.swing.JTextField txtData;
+    private javax.swing.JTextField txtDescricao;
+    private javax.swing.JTextField txtHorario;
+    private javax.swing.JTextField txtIdAgenda;
+
+    public static void main(String args[]) {
+        java.awt.EventQueue.invokeLater(new Runnable() {
+            public void run() {
+                new TelaAgenda().setVisible(true);
+            }
+        });
+    }
+}
